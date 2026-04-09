@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-function TimelineCard({ match, isLast, apiUrl }) {
+function TimelineCard({ match, isLast, apiUrl, onZoom }) {
   const [imgError, setImgError] = useState(false);
   const imgSrc = match.imageUrl ? `${apiUrl}${match.imageUrl}` : null;
 
@@ -8,7 +8,11 @@ function TimelineCard({ match, isLast, apiUrl }) {
     <div className={`timeline-card ${isLast ? 'last-seen' : ''}`} role="article" aria-label={`${match.camera} sighting`}>
       {/* Image */}
       {imgSrc && !imgError ? (
-        <div className="timeline-card-img">
+        <div 
+          className="timeline-card-img" 
+          onClick={() => onZoom(imgSrc)}
+          style={{ cursor: 'zoom-in' }}
+        >
           <img
             src={imgSrc}
             alt={`CCTV capture from ${match.camera}`}
@@ -37,7 +41,7 @@ function TimelineCard({ match, isLast, apiUrl }) {
   );
 }
 
-export default function MatchesTimeline({ matches, lastSeenCamera, apiUrl }) {
+export default function MatchesTimeline({ matches, lastSeenCamera, apiUrl, onZoom }) {
   return (
     <div className="timeline-section" role="region" aria-label="CCTV sighting timeline">
       <div className="timeline-title">
@@ -59,7 +63,7 @@ export default function MatchesTimeline({ matches, lastSeenCamera, apiUrl }) {
               </div>
 
               {/* Card */}
-              <TimelineCard match={match} isLast={isLast} apiUrl={apiUrl} />
+              <TimelineCard match={match} isLast={isLast} apiUrl={apiUrl} onZoom={onZoom} />
             </div>
           );
         })}

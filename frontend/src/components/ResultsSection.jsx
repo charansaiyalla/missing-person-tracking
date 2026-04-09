@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import MatchesTimeline from './MatchesTimeline';
+import ZoomModal from './ZoomModal';
 
 export default function ResultsSection({ isLoading, results, error, onReset, apiUrl }) {
   const [barWidth, setBarWidth] = useState(0);
+  const [zoomedImage, setZoomedImage] = useState(null);
 
   useEffect(() => {
     if (results?.lastSeen?.confidence) {
@@ -20,7 +22,7 @@ export default function ResultsSection({ isLoading, results, error, onReset, api
           <div className="loading-scanner-face">🧑</div>
           <div className="loading-scan-line" />
         </div>
-        <div className="loading-title">Scanning CCTV Footage…</div>
+        <div className="loading-title">🔍 Scanning CCTV footage...</div>
         <div className="loading-sub">AI is comparing facial encodings against dataset</div>
         <div className="loading-dots" aria-hidden="true">
           <div className="loading-dot" />
@@ -55,10 +57,10 @@ export default function ResultsSection({ isLoading, results, error, onReset, api
       <section className="results-section" aria-live="polite">
         <div className="state-card error" role="alert">
           <span className="state-icon">😶</span>
-          <h2 className="state-title">No Face Detected</h2>
+          <h2 className="state-title">No face detected in uploaded image</h2>
           <p className="state-desc">
             The uploaded image does not appear to contain a detectable face.
-            Please upload a clear, front-facing photograph with good lighting.
+            Try uploading a clearer image.
           </p>
           <button id="reset-btn-noface" className="btn btn-ghost" onClick={onReset} style={{ marginTop: '24px' }}>
             Upload Different Image
@@ -74,11 +76,11 @@ export default function ResultsSection({ isLoading, results, error, onReset, api
       <section className="results-section" aria-live="polite">
         <div className="state-card not-found" role="alert">
           <span className="state-icon">🔎</span>
-          <h2 className="state-title">Person Not Found</h2>
+          <h2 className="state-title">No match found in available CCTV data</h2>
           <p className="state-desc">
             No matching face was found in the CCTV dataset. The person may not
             have appeared in any of the monitored locations, or the image quality
-            may be too low for a confident match.
+            may be too low. Try uploading a clearer image.
           </p>
           <button id="reset-btn-notfound" className="btn btn-ghost" onClick={onReset} style={{ marginTop: '24px' }}>
             Try Another Image
@@ -89,7 +91,7 @@ export default function ResultsSection({ isLoading, results, error, onReset, api
   }
 
   // ── Results Found ─────────────────────────────────────────────────
-  const { lastSeen, matches, mode, message, matchCount } = results;
+  const { lastSeen, matches, mode, message, matchCount, datasetCount } = results;
   const isMock = mode === 'mock';
 
   return (
@@ -97,12 +99,18 @@ export default function ResultsSection({ isLoading, results, error, onReset, api
       {/* Header */}
       <div className="results-header">
         <h2 className="results-title">
-          🎯 Results — {matchCount || matches?.length || 0} Match{(matchCount || matches?.length) !== 1 ? 'es' : ''} Found
+          🎯 Matches Found: {matchCount || matches?.length || 0}
         </h2>
         <div className={`results-mode-badge ${isMock ? 'mock' : 'ai'}`}>
-          {isMock ? '🔶 Demo Mode' : '🤖 AI Mode'}
+          {isMock ? 'Mode: Demo (Simulated Data)' : 'Mode: AI Processing'}
         </div>
       </div>
+      
+      {datasetCount !== undefined && (
+        <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-dim)', textAlign: 'center' }}>
+          Scanning {datasetCount} CCTV frames...
+        </div>
+      )}
 
       {/* Mock Warning */}
       {isMock && (
@@ -117,8 +125,8 @@ export default function ResultsSection({ isLoading, results, error, onReset, api
       {/* Last Seen Card */}
       {lastSeen && (
         <div className="last-seen-card" role="region" aria-label="Last known location">
-          <div className="last-seen-eyebrow">
-            📍 Last Known Location
+          <div className="last-seen-eyebrow" style={{ color: 'var(--danger)', fontSize: '14px' }}>
+            🚨 LAST SEEN
           </div>
           <div className="last-seen-grid">
             <div className="last-seen-stat">
@@ -136,8 +144,9 @@ export default function ResultsSection({ isLoading, results, error, onReset, api
             {lastSeen.confidence && (
               <div className="last-seen-stat">
                 <div className="last-seen-stat-icon">🎯</div>
-                <div className="last-seen-stat-label">Confidence</div>
-                <div className="last-seen-stat-value">{lastSeen.confidence}%</div>
+                <div className="last-seen-stat-label">Confidence Score</div>
+                <div className="last-seen-stat-value">Confidence: {lastSeen.confidence}%</div>
+                <div className="last-seen-stat-sub">({lastSeen.confidence > 85 ? 'High Match' : 'Match'})</div>
                 <div className="confidence-bar-wrap">
                   <div
                     className="confidence-bar"
@@ -162,15 +171,17 @@ export default function ResultsSection({ isLoading, results, error, onReset, api
 
       {/* Timeline */}
       {matches && matches.length > 0 && (
-        <MatchesTimeline matches={matches} lastSeenCamera={lastSeen?.camera} apiUrl={apiUrl} />
+        <MatchesTimeline matches={matches} lastSeenCamera={lastSeen?.camera} apiUrl={apiUrl} onZoom={setZoomedImage} />
       )}
 
       {/* New Search */}
       <div style={{ marginTop: '32px', textAlign: 'center' }}>
         <button id="new-search-btn" className="btn btn-ghost" onClick={onReset}>
-          🔄 New Search
+          🔄 Clear Results
         </button>
       </div>
+
+      {zoomedImage && <ZoomModal imgSrc={zoomedImage} onClose={() => setZoomedImage(null)} />}
     </section>
   );
 }

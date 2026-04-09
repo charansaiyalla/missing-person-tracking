@@ -9,8 +9,11 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 const PORT = 5000;
 
+// In-memory case storage
+const cases = [];
+
 // ─── Middleware ───────────────────────────────────────────────────────────────
-app.use(cors({ origin: 'http://localhost:5173' }));
+app.use(cors());
 app.use(express.json());
 
 // Serve dataset images statically
@@ -178,15 +181,14 @@ app.post('/api/search', upload.single('image'), async (req, res) => {
     // If Python returned an import error (face_recognition not installed), use mock
     if (result.error === 'face_recognition not installed' || result.install) {
       console.log('face_recognition not installed — using mock mode');
-      return res.json({
-        ...getMockResults(queryImageUrl),
-        fallbackReason: 'face_recognition library not installed on this machine',
-      });
-    }
-
-    // If Python returned another error (no face, empty dataset), pass it through
-    if (result.error && result.error !== 'not_found') {
+      const mockRes = getMockResults(queryImageUrl);
+      mockRes.fallbackReason = 'face_recognition library not installed on this machine';
+      result = mockRes;
+    } else if (result.error && result.error !== 'not_found' && result.error !== 'empty_dataset') {
+      // If Python returned another error (no face, empty dataset), pass it through
       return res.json({ ...result, queryImage: queryImageUrl });
+    } else {
+      result.mode = 'ai';
     }
 
     // Enrich AI result with location names
@@ -202,21 +204,71 @@ app.post('/api/search', upload.single('image'), async (req, res) => {
       }
     }
 
+    // Calculate dataset count
+    let datasetCount = 0;
+    try {
+      const files = fs.readdirSync(datasetPath).filter((f) => /\.(jpg|jpeg|png)$/i.test(f));
+      datasetCount = files.length;
+    } catch {}
+
     result.queryImage = queryImageUrl;
-    result.mode = 'ai';
+    result.datasetCount = datasetCount;
+    
+    // Create new case record
+    const newCase = {
+      id: uuidv4(),
+      status: 'Open',
+      personDetails: {
+        name: req.body.name || 'Unknown',
+        age: req.body.age || 'Unknown',
+        gender: req.body.gender || 'Not specified',
+        lastSeenLocation: req.body.lastSeenLocation || 'Unknown',
+        missingDate: req.body.missingDate || 'Unknown',
+        contactInfo: req.body.contactInfo || 'Not provided',
+      },
+      createdAt: new Date().toISOString(),
+      queryImage: queryImageUrl,
+      results: result
+    };
+    cases.push(newCase);
+    
+    // Also append the case details to the immediate result
+    result.caseDetails = newCase.personDetails;
+
     return res.json(result);
   } catch (err) {
     console.error('Search error:', err);
     return res.status(500).json({ error: err.message });
   } finally {
     // Clean up upload after 5 minutes
-    setTimeout(() => { try { fs.unlinkSync(imagePath); } catch {} }, 5 * 60 * 1000);
+    setTimeout(() => { try { fs.unlinkSync(imagePath); } catch { } }, 5 * 60 * 1000);
   }
 });
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', datasetPath, uploadsPath });
+});
+
+// ─── Case Management ─────────────────────────────────────────────────────────
+
+app.put('/api/cases/:id/status', (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  const caseIndex = cases.findIndex(c => c.id === id);
+  if (caseIndex === -1) return res.status(404).json({ error: 'Case not found' });
+  
+  cases[caseIndex].status = status;
+  return res.json(cases[caseIndex]);
+});
+
+app.delete('/api/cases/:id', (req, res) => {
+  const { id } = req.params;
+  const initialLength = cases.length;
+  cases = cases.filter(c => c.id !== id);
+  if (cases.length === initialLength) return res.status(404).json({ error: 'Case not found' });
+  
+  return res.json({ success: true, message: 'Case deleted successfully' });
 });
 
 // ─── Dataset list ─────────────────────────────────────────────────────────────
@@ -227,6 +279,11 @@ app.get('/api/dataset', (req, res) => {
   } catch {
     res.json({ files: [], count: 0 });
   }
+});
+
+// ─── Case Storage Route ───────────────────────────────────────────────────────
+app.get('/api/cases', (req, res) => {
+  res.json(cases);
 });
 
 // ─── Error Handler ────────────────────────────────────────────────────────────

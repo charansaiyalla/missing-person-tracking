@@ -6,6 +6,8 @@ import UploadSection from './components/UploadSection';
 import ResultsSection from './components/ResultsSection';
 import HowItWorks from './components/HowItWorks';
 import Footer from './components/Footer';
+import Login from './components/Login';
+import PoliceDashboard from './components/PoliceDashboard';
 
 const API_URL = 'http://localhost:5000';
 
@@ -16,6 +18,18 @@ export default function App() {
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
   const [activeNav, setActiveNav] = useState('home');
+  const [view, setView] = useState('login'); // login | citizen | police
+  const [userRole, setUserRole] = useState(null);
+  const [username, setUsername] = useState(null);
+  const [recentSearches, setRecentSearches] = useState([]);
+
+  // Load recent searches from local storage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('trackai_searches');
+    if (saved) {
+      try { setRecentSearches(JSON.parse(saved)); } catch (e) {}
+    }
+  }, []);
 
   // Cleanup object URL on unmount/change
   useEffect(() => {
@@ -39,13 +53,29 @@ export default function App() {
     setError(null);
   };
 
-  const handleSearch = async () => {
+  const handleLogin = (role, user) => {
+    setUserRole(role);
+    setUsername(user);
+    if (role === 'police') {
+      setView('police');
+    } else {
+      setView('citizen');
+    }
+  };
+
+  const handleLogout = () => {
+    setUserRole(null);
+    setUsername(null);
+    setView('login');
+    handleClear();
+  };
+
+  const handleSearch = async (formData) => {
     if (!selectedFile) return;
     setIsLoading(true);
     setResults(null);
     setError(null);
 
-    const formData = new FormData();
     formData.append('image', selectedFile);
 
     try {
@@ -62,6 +92,19 @@ export default function App() {
       }
 
       setResults(data);
+      
+      // Save search history
+      if (data && data.caseDetails) {
+         const newHistory = [{
+           id: data.caseDetails.name + '-' + Date.now(),
+           name: data.caseDetails.name,
+           time: new Date().toLocaleTimeString(),
+           date: new Date().toLocaleDateString(),
+           lastSeenLocation: data.lastSeen?.location || 'Unknown',
+         }, ...recentSearches].slice(0, 5);
+         setRecentSearches(newHistory);
+         localStorage.setItem('trackai_searches', JSON.stringify(newHistory));
+      }
     } catch (err) {
       setError(err.message || 'An unexpected error occurred');
     } finally {
@@ -76,36 +119,53 @@ export default function App() {
 
   return (
     <>
-      <Navbar activeNav={activeNav} onNav={scrollTo} />
+      <Navbar activeNav={activeNav} onNav={scrollTo} view={view} onLogout={handleLogout} username={username} />
       <main>
-        <section id="home">
-          <HeroSection />
-        </section>
+        {view === 'login' && (
+          <div className="container">
+            <Login onLogin={handleLogin} />
+          </div>
+        )}
 
-        <div className="container">
-          <UploadSection
-            selectedFile={selectedFile}
-            previewUrl={previewUrl}
-            isLoading={isLoading}
-            onFileSelect={handleFileSelect}
-            onClear={handleClear}
-            onSearch={handleSearch}
-          />
+        {view === 'police' && (
+          <div className="container">
+             <PoliceDashboard apiUrl={API_URL} />
+          </div>
+        )}
 
-          {(isLoading || results || error) && (
-            <ResultsSection
-              isLoading={isLoading}
-              results={results}
-              error={error}
-              onReset={handleClear}
-              apiUrl={API_URL}
-            />
-          )}
-
-          <section id="about">
-            <HowItWorks />
-          </section>
-        </div>
+        {view === 'citizen' && (
+          <>
+            <section id="home">
+              <HeroSection />
+            </section>
+    
+            <div className="container">
+              <UploadSection
+                selectedFile={selectedFile}
+                previewUrl={previewUrl}
+                isLoading={isLoading}
+                onFileSelect={handleFileSelect}
+                onClear={handleClear}
+                onSearch={handleSearch}
+                recentSearches={recentSearches}
+              />
+    
+              {(isLoading || results || error) && (
+                <ResultsSection
+                  isLoading={isLoading}
+                  results={results}
+                  error={error}
+                  onReset={handleClear}
+                  apiUrl={API_URL}
+                />
+              )}
+    
+              <section id="about">
+                <HowItWorks />
+              </section>
+            </div>
+          </>
+        )}
       </main>
       <Footer />
     </>

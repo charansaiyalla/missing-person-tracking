@@ -1,4 +1,4 @@
-export default function Navbar({ activeNav, onNav }) {
+export default function Navbar({ activeNav, onNav, view, onLogout, username }) {
   return (
     <nav className="navbar" role="navigation" aria-label="Main navigation">
       <div className="container navbar-inner">
@@ -33,9 +33,28 @@ export default function Navbar({ activeNav, onNav }) {
               How It Works
             </a>
           </li>
-          <li>
-            <span className="navbar-badge">AI Prototype</span>
-          </li>
+          {view !== 'login' ? (
+            <>
+              <li>
+                <span className="navbar-badge" style={{ background: view === 'police' ? 'var(--danger)' : 'var(--accent)' }}>
+                  {view === 'police' ? '🚔 POLICE / ADMIN' : `👤 ${username || 'CITIZEN'}`}
+                </span>
+              </li>
+              <li>
+                <button 
+                  className="btn btn-ghost" 
+                  style={{ padding: '4px 12px', fontSize: '11px', minHeight: 'auto' }}
+                  onClick={onLogout}
+                >
+                  Logout
+                </button>
+              </li>
+            </>
+          ) : (
+            <li>
+              <span className="navbar-badge">AI Prototype</span>
+            </li>
+          )}
         </ul>
       </div>
     </nav>
